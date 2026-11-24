@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Türkiye Canlı Sismik Anomali & Zemin Risk Platformu</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, sans-serif; }
+        body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; background: #0f172a; color: #f8fafc; overflow: hidden; }
+
+        /* Üst Kontrol Çubuğu */
+        header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 16px; background: #1e293b; border-bottom: 1px solid #334155;
+            z-index: 1000; flex-wrap: wrap; gap: 8px;
+        }
+        .brand { display: flex; align-items: center; gap: 10px; }
+        .pulse {
+            width: 10px; height: 10px; background: #22c55e; border-radius: 50%; flex-shrink: 0;
+            box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+            70% { box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+        }
+        .brand h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.3px; }
+        .live-meta { font-size: 11.5px; color: #94a3b8; }
+
+        /* Kategori Sekmeleri */
+        .tabs { display: flex; gap: 6px; background: #0f172a; padding: 4px; border-radius: 8px; }
+        .tab-btn {
+            border: none; background: transparent; color: #94a3b8; padding: 7px 12px;
+            border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: 0.2s;
+            white-space: nowrap;
+        }
+        .tab-btn:hover { color: #fff; background: #1e293b; }
+        .tab-btn.active { background: #2563eb; color: #fff; }
+
+        /* Ana Gövde: Bilgisayarda Yan Yana */
+        .main-container { display: flex; flex: 1; position: relative; overflow: hidden; }
+        .map-wrapper { flex: 1; position: relative; height: 100%; }
+        #map { width: 100%; height: 100%; background: #0b1120; }
+
+        /* Sağ Yan Panel */
+        #sidebar {
+            width: 370px; background: #1e293b; border-left: 1px solid #334155;
+            padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px;
+            z-index: 900;
+        }
+        .card { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 14px; }
+        .card h3 { font-size: 13px; color: #94a3b8; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; }
+        .score-box {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px; border-radius: 8px; margin-bottom: 10px; font-weight: bold;
+        }
+        .stat-row {
+            display: flex; justify-content: space-between; padding: 6px 0;
+            border-bottom: 1px solid #1e293b; font-size: 13px; gap: 8px;
+        }
+        .stat-row span:first-child { color: #94a3b8; }
+        .stat-row span:last-child { font-weight: 600; color: #f1f5f9; text-align: right; }
+
+        .badge { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+        .list-item {
+            padding: 8px 10px; border-bottom: 1px solid #1e293b; cursor: pointer;
+            display: flex; justify-content: space-between; align-items: center; font-size: 12.5px;
+        }
+        .list-item:hover { background: #1e293b; }
+
+        /* Harita İçi Lejant */
+        .legend {
+            position: absolute; bottom: 20px; left: 16px; background: rgba(15, 23, 42, 0.92);
+            border: 1px solid #334155; padding: 10px 12px; border-radius: 8px; font-size: 11.5px;
+            z-index: 800; line-height: 1.6; backdrop-filter: blur(4px);
+        }
+        .dot { width: 10px; height: 10px; display: inline-block; border-radius: 2px; margin-right: 6px; }
+
+        /* ==========================================
+           MOBİL EKRAN DÜZENİ (DİKEY TELEFONLAR)
+           ========================================== */
+        @media (max-width: 768px) {
+            header { padding: 8px 12px; }
+            .brand h1 { font-size: 13px; }
+            .tabs { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .tab-btn { font-size: 11.5px; padding: 6px 10px; }
+
+            .main-container { flex-direction: column; }
+            .map-wrapper { flex: none; width: 100%; height: 52vh; }
+            #sidebar {
+                width: 100%; flex: 1; border-left: none; border-top: 2px solid #334155;
+                padding: 12px; gap: 10px;
+            }
+            .legend {
+                bottom: 8px; left: 8px; padding: 6px 8px; font-size: 10px;
+                line-height: 1.4; max-width: 215px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="brand">
+        <div class="pulse"></div>
+        <div>
+            <h1>TÜRKİYE CANLI SİSMİK ANOMALİ & ZEMİN RİSK MONİTÖRÜ</h1>
+            <div class="live-meta" id="update-status">Veriler yükleniyor...</div>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchMode('composite', this)">1. Bileşik Risk & Anomali</button>
+        <button class="tab-btn" onclick="switchMode('soil', this)">2. Zemin Yapısı (Vs30)</button>
+        <button class="tab-btn" onclick="switchMode('geothermal', this)">3. Jeotermal & Fırtına Zonları</button>
+        <button class="tab-btn" onclick="switchMode('quakes', this)">4. Canlı Son Depremler (5 Dk)</button>
+    </div>
+</header>
+
+<div class="main-container">
+    <div class="map-wrapper">
+        <div id="map"></div>
+        <div class="legend" id="map-legend"></div>
+
+    <aside id="sidebar">
+
+    <aside id="sidebar">
+        <div class="card" id="detail-panel">
+            <h3>Seçili Bölge / Şehir Analizi</h3>
+            <p style="font-size: 13px; color: #94a3b8; line-height: 1.5;">
+                Detaylı sismik anomali, <b>Z-skoru</b>, <b>b-değeri</b>, biriken fay atımı ve yerel <b>Vs30 zemin büyütmesi</b> verilerini görmek için haritadaki herhangi bir altıgene, şehre veya jeotermal alana tıklayın.
+            </p>
+        </div>
+
+        <div class="card">
+            <h3 id="ranking-title">En Yüksek Riskli İlk 10 Şehir/İlçe</h3>
+            <div id="ranking-list">Yükleniyor...</div>
+        </div>
+    </aside>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    const map = L.map('map').setView([39.0, 35.2], 6);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Esri | USGS Canlı Sismik Veri'
+    }).addTo(map);
+
+    let layerGroup = L.layerGroup().addTo(map);
+    let globalData = null;
+    let currentMode = 'composite';
+    let countdown = 300;
+
+    function getRiskColor(score, isSwarm = false, z = 0) {
+        if (isSwarm && z >= 1.5) return '#38bdf8';
+        if (score >= 72) return '#ef4444';
+        if (score >= 55) return '#f97316';
+        if (score >= 38) return '#eab308';
+        return '#22c55e';
+    }
+
+    function getSoilColor(vs30) {
+        if (vs30 < 210) return '#ef4444';      // ZE (Çok zayıf alüvyon)
+        if (vs30 < 300) return '#f97316';      // ZD (Orta-gevşek zemin)
+        if (vs30 < 500) return '#eab308';      // ZC (Sıkı zemin / ayrışmış kaya)
+        return '#22c55e';                      // ZB (Sağlam kaya)
+    }
+
+    function switchMode(mode, btn) {
+        currentMode = mode;
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        renderMap();
+    }
+
+    function showCityDetail(c) {
+        const col = currentMode === 'soil' ? getSoilColor(c.vs30) : getRiskColor(c.nihai_risk, c.firtina_filtresi, c.z_skoru);
+        document.getElementById('detail-panel').innerHTML = `
+            <h3>${c.il} / ${c.ilce}</h3>
+            <div class="score-box" style="background: ${col}22; border-left: 4px solid ${col}; color: ${col};">
+                <span>Nihai Zeminli Risk Skoru</span>
+                <span style="font-size: 20px;">${c.nihai_risk} / 100</span>
+            </div>
+            <div class="stat-row"><span>Zemin Formasyonu:</span><span>${c.zemin}</span></div>
+            <div class="stat-row"><span>Vs30 Dalga Hızı:</span><span>${c.vs30} m/s (${c.carpan}x Büyütme)</span></div>
+            <div class="stat-row"><span>Saf Tektonik Tehlike:</span><span>${c.tektonik_skor} / 100</span></div>
+            <div class="stat-row"><span>Fay Kuşağı:</span><span>${c.fay}</span></div>
+            <div class="stat-row"><span>GPS Hızı / Biriken Atım:</span><span>${c.gps_mm} mm/yıl (${c.biriken_atim_m} m)</span></div>
+            <div class="stat-row"><span>Son M&ge;5.0 Süresi:</span><span>${c.son_m5_yil} yıl</span></div>
+            <div class="stat-row"><span>Sismisite Z-Skoru:</span><span>${c.z_skoru} (Son 30G: ${c.son_30g})</span></div>
+            <div class="stat-row"><span>b-Değeri (Stres):</span><span>${c.b_degeri ?? 'Yetersiz Veri'}</span></div>
+            <div class="stat-row"><span>Jeotermal Fırtına Filtresi:</span><span>${c.firtina_filtresi ? 'EVET (Baskılandı)' : 'Hayır'}</span></div>
+        `;
+    }
+
+    function showHexDetail(h) {
+        const col = getRiskColor(h.skor, h.firtina_filtresi, h.z_skoru);
+        document.getElementById('detail-panel').innerHTML = `
+            <h3>Tektonik Hücre (${h.lat}°K, ${h.lon}°D)</h3>
+            <div class="score-box" style="background: ${col}22; border-left: 4px solid ${col}; color: ${col};">
+                <span>Tektonik Anomali Skoru</span>
+                <span style="font-size: 20px;">${h.skor} / 100</span>
+            </div>
+            <div class="stat-row"><span>Tektonik Kuşak:</span><span>${h.fay}</span></div>
+            <div class="stat-row"><span>GPS Kayma Hızı:</span><span>${h.gps_mm} mm/yıl</span></div>
+            <div class="stat-row"><span>Biriken Kayma Açığı:</span><span>${h.biriken_atim_m} m (${h.son_m5_yil} yıl)</span></div>
+            <div class="stat-row"><span>Sismisite Z-Skoru:</span><span>${h.z_skoru} (30G: ${h.son_30g} / Ort: ${h.aylik_ort})</span></div>
+            <div class="stat-row"><span>b-Değeri (Stres):</span><span>${h.b_degeri ?? 'Yetersiz Veri'}</span></div>
+            <div class="stat-row"><span>Ort. Odak Derinliği:</span><span>${h.ort_derinlik} km</span></div>
+            <div class="stat-row"><span>Jeotermal Etki Alanı:</span><span>${h.jeotermal_yakin ? 'Evet' : 'Hayır'}</span></div>
+            <div class="stat-row"><span>Fırtına Filtresi:</span><span>${h.firtina_filtresi ? 'EVET (Akışkan Fırtınası)' : 'Hayır'}</span></div>
+        `;
+    }
+
+    function renderMap() {
+        if (!globalData) return;
+        layerGroup.clearLayers();
+        const legend = document.getElementById('map-legend');
+        const listEl = document.getElementById('ranking-list');
+        const listTitle = document.getElementById('ranking-title');
+
+        // 1. MOD: BİLEŞİK RİSK (ALTIGENLER + 81 İL)
+        if (currentMode === 'composite') {
+            globalData.hexagons.forEach(h => {
+                const c = getRiskColor(h.skor, h.firtina_filtresi, h.z_skoru);
+                L.polygon(h.vertices, {
+                    color: '#334155', weight: 0.7, fillColor: c, fillOpacity: 0.42
+                }).on('click', () => showHexDetail(h))
+                  .bindTooltip(`Hücre Skor: ${h.skor}/100 | Z: ${h.z_skoru}`)
+                  .addTo(layerGroup);
+            });
+
+            globalData.cities.forEach(city => {
+                const c = getRiskColor(city.nihai_risk, city.firtina_filtresi, city.z_skoru);
+                L.circleMarker([city.lat, city.lon], {
+                    radius: 7, color: '#0f172a', weight: 1.5, fillColor: c, fillOpacity: 0.95
+                }).on('click', () => showCityDetail(city))
+                  .bindTooltip(`${city.il}/${city.ilce} | Zeminli Risk: ${city.nihai_risk}/100`)
+                  .addTo(layerGroup);
+            });
+
+            legend.innerHTML = `
+                <b>Bileşik Sismik Risk & Anomali</b><br>
+                <span class="dot" style="background:#ef4444"></span><b>Kırmızı (&ge;72):</b> Çok Yüksek Gerilim & Zayıf Zemin<br>
+                <span class="dot" style="background:#f97316"></span><b>Turuncu (55–71):</b> Yüksek Tektonik Birikim<br>
+                <span class="dot" style="background:#eab308"></span><b>Sarı (38–54):</b> Orta Düzey Risk<br>
+                <span class="dot" style="background:#22c55e"></span><b>Yeşil (&lt;38):</b> Normal Arka Plan<br>
+                <span class="dot" style="background:#38bdf8"></span><b>Mavi:</b> Jeotermal Fırtına (Baskılandı)
+            `;
+            listTitle.innerText = "En Yüksek Zeminli Risk (İlk 10)";
+            listEl.innerHTML = globalData.cities.slice(0, 10).map(c => `
+                <div class="list-item" onclick='map.setView([${c.lat}, ${c.lon}], 9);'>
+                    <span><b>${c.il}</b> - ${c.ilce} <small style="color:#94a3b8">(Vs30: ${c.vs30})</small></span>
+                    <span class="badge" style="background:${getRiskColor(c.nihai_risk)}33; color:${getRiskColor(c.nihai_risk)}">${c.nihai_risk}</span>
+                </div>
+            `).join('');
+        }
+
+        // 2. MOD: SADECE ZEMİN YAPISI (Vs30)
+        else if (currentMode === 'soil') {
+            globalData.cities.forEach(city => {
+                const c = getSoilColor(city.vs30);
+                L.circleMarker([city.lat, city.lon], {
+                    radius: 10, color: '#0f172a', weight: 1.5, fillColor: c, fillOpacity: 0.9
+                }).on('click', () => showCityDetail(city))
+                  .bindTooltip(`${city.il}/${city.ilce} | Vs30: ${city.vs30} m/s (${city.carpan}x)`)
+                  .addTo(layerGroup);
+            });
+
+            legend.innerHTML = `
+                <b>Yerel Zemin Sınıflaması (Vs30)</b><br>
+                <span class="dot" style="background:#ef4444"></span><b>ZE (&lt;210 m/s):</b> Gevşek Alüvyon / Sıvılaşma Riski (~1.5x)<br>
+                <span class="dot" style="background:#f97316"></span><b>ZD (210–300 m/s):</b> Havza Çökeli / Orta-Zayıf Zemin (~1.35x)<br>
+                <span class="dot" style="background:#eab308"></span><b>ZC (300–500 m/s):</b> Sıkı Zemin / Ayrışmış Kaya (~1.18x)<br>
+                <span class="dot" style="background:#22c55e"></span><b>ZB (&gt;500 m/s):</b> Sağlam Kaya Formasyonu (~1.0x)
+            `;
+            const softest = [...globalData.cities].sort((a, b) => a.vs30 - b.vs30).slice(0, 10);
+            listTitle.innerText = "Zemin Büyütmesi En Yüksek 10 Bölge";
+            listEl.innerHTML = softest.map(c => `
+                <div class="list-item" onclick='map.setView([${c.lat}, ${c.lon}], 9);'>
+                    <span><b>${c.il}</b> - ${c.ilce}</span>
+                    <span class="badge" style="background:#ef444433; color:#ef4444">${c.vs30} m/s (${c.carpan}x)</span>
+                </div>
+            `).join('');
+        }
+
+        // 3. MOD: JEOTERMAL HAVZALAR & FIRTINA FİLTRESİ
+        else if (currentMode === 'geothermal') {
+            globalData.geothermal.forEach(g => {
+                L.circle([g.lat, g.lon], {
+                    radius: g.radius_km * 1000, color: '#0284c7', weight: 1.5, fillColor: '#38bdf8', fillOpacity: 0.35
+                }).on('click', () => {
+                    document.getElementById('detail-panel').innerHTML = `
+                        <h3>${g.name}</h3>
+                        <div class="score-box" style="background:#38bdf822; border-left:4px solid #38bdf8; color:#38bdf8;">
+                            <span>Aktif Hidrotermal / Jeotermal Zon</span>
+                        </div>
+                        <div class="stat-row"><span>Sistem Tipi:</span><span>${g.type}</span></div>
+                        <div class="stat-row"><span>Rezervuar Sıcaklığı:</span><span>${g.temp_c}</span></div>
+                        <div class="stat-row"><span>Etki Yarıçapı:</span><span>${g.radius_km} km</span></div>
+                        <p style="font-size:12px; color:#94a3b8; margin-top:8px;">
+                            Bu alandaki sığ (&lt;11.5 km) ve yüksek b-değerli sismik kümelenmeler algoritma tarafından akışkan tetiklemeli <b>deprem fırtınası</b> olarak filtrelenir.
+                        </p>
+                    `;
+                }).bindTooltip(`${g.name} (${g.temp_c})`).addTo(layerGroup);
+            });
+
+            legend.innerHTML = `
+                <b>Jeotermal & Hidrotermal Akışkan Zonları</b><br>
+                <span class="dot" style="background:#38bdf8"></span><b>Mavi Daireler:</b> Yüksek Isı Akılı Jeotermal Havzalar<br>
+                <small style="color:#94a3b8">Gözenek suyu basıncı yüksek olduğu için deprem fırtınası üretme potansiyeli yüksek alanlar.</small>
+            `;
+            listTitle.innerText = "Başlıca Jeotermal Sistemler";
+            listEl.innerHTML = globalData.geothermal.map(g => `
+                <div class="list-item" onclick='map.setView([${g.lat}, ${g.lon}], 8);'>
+                    <span>${g.name}</span>
+                    <span class="badge" style="background:#38bdf833; color:#38bdf8">${g.temp_c}</span>
+                </div>
+            `).join('');
+        }
+
+        // 4. MOD: CANLI SON DEPREMLER (5 DK AKIŞ)
+        else if (currentMode === 'quakes') {
+            globalData.recent_quakes.forEach(q => {
+                const col = q.mag >= 4.0 ? '#ef4444' : (q.mag >= 3.0 ? '#f97316' : '#38bdf8');
+                L.circleMarker([q.lat, q.lon], {
+                    radius: Math.max(5, q.mag * 3.2), color: '#fff', weight: 1, fillColor: col, fillOpacity: 0.85
+                }).bindTooltip(`M ${q.mag} | ${q.place} | Derinlik: ${q.depth} km | ${q.time_tr}`)
+                  .addTo(layerGroup);
+            });
+
+            legend.innerHTML = `
+                <b>Canlı Son Depremler (Son 7 Gün / 5 Dk Akış)</b><br>
+                <span class="dot" style="background:#ef4444"></span><b>M &ge; 4.0:</b> Orta / Hissedilen Deprem<br>
+                <span class="dot" style="background:#f97316"></span><b>M 3.0 – 3.9:</b> Küçük Deprem<br>
+                <span class="dot" style="background:#38bdf8"></span><b>M &lt; 3.0:</b> Mikro-sismik Aktivite
+            `;
+            listTitle.innerText = "Son Gerçekleşen Depremler";
+            listEl.innerHTML = globalData.recent_quakes.slice(0, 12).map(q => `
+                <div class="list-item" onclick='map.setView([${q.lat}, ${q.lon}], 9);'>
+                    <span><b>M ${q.mag}</b> - ${q.place.substring(0, 22)}...<br><small style="color:#94a3b8">${q.time_tr}</small></span>
+                    <span class="badge" style="background:#f9731633; color:#f97316">${q.depth} km</span>
+                </div>
+            `).join('');
+        }
+    }
+
+    async function fetchLiveData() {
+        try {
+            const res = await fetch('/api/live-data');
+            const data = await res.json();
+            if (data.updated_at) {
+                globalData = data;
+                countdown = 300;
+                renderMap();
+            }
+        } catch (err) {
+            console.error("Veri çekme hatası:", err);
+        }
+    }
+
+    // Her saniye geri sayım ve 5 dakikada bir otomatik yenileme
+    setInterval(() => {
+        if (countdown > 0) countdown--;
+        const min = String(Math.floor(countdown / 60)).padStart(2, '0');
+        const sec = String(countdown % 60).padStart(2, '0');
+        const updText = globalData ? `Son Güncelleme: ${globalData.updated_at} | ` : '';
+        document.getElementById('update-status').innerText = `${updText}Canlı Yenileme: ${min}:${sec}`;
+        if (countdown === 0) fetchLiveData();
+    }, 1000);
+
+    fetchLiveData();
+    // İlk açılışta veri 10 sn içinde hazır olursa yakalamak için kısa kontrol
+    setTimeout(fetchLiveData, 8000);
+    setTimeout(fetchLiveData, 16000);
+</script>
+</body>
+</html>
